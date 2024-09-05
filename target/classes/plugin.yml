@@ -1,0 +1,4 @@
+name: fantasia-money
+version: '1.0-SNAPSHOT'
+main: io.github.toniidev.fantasiamoney.FantasiaMoney
+api-version: '1.20'
