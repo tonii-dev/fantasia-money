@@ -102,13 +102,15 @@ public class CreditCard implements Listener, MessageHandler {
     }
 
     private void refresh(Player p){
+        CreditCard card = getCreditCardFromPlayer(p);
+
         // items
         ItemStack sign = ItemHelper.createItem(Material.OAK_SIGN,
                 "§r§aPassword", ItemType.DEFAULT);
         ItemHelper.setUnsafeLore(sign,
                 "§r§7Scegli una password per la",
                 "§r§7tua carta di credito.", " ",
-                "§r§7Password: §e" + pwd, " ", "§eClicca per sceglierne una!");
+                "§r§7Password: §e" + card.pwd, " ", "§eClicca per sceglierne una!");
 
         ItemStack close = ItemHelper.createItem(Material.RED_STAINED_GLASS_PANE,
                 "§r§cChiudi", ItemType.DEFAULT);
@@ -131,7 +133,7 @@ public class CreditCard implements Listener, MessageHandler {
                 .fillWithGlass(GlassType.WHITE)
                 .get();
 
-        invs.put(inv, getCreditCardFromPlayer(p));
+        invs.put(inv, card);
     }
 
     @EventHandler
