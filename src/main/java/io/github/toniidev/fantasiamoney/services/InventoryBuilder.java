@@ -9,122 +9,162 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import javax.annotation.Nullable;
+import java.util.*;
 
 public class InventoryBuilder implements Listener {
     private Inventory inv;
+    private final Plugin plugin;
 
-    private Plugin plugin;
+    private static final Map<Inventory, InventoryBuilder> info = new HashMap<>();
+    private static final Map<Inventory, Map<Integer, InputType>> invsToHandle = new HashMap<>();
+    private static final List<Inventory> invsToDisableClicks = new ArrayList<>();
+    private static final List<Inventory> invsToDisableClose = new ArrayList<>();
+    private static final Map<InputType, String[]> titles = new HashMap<>();
 
-    private int handleStartSlot;
-    private InputType inputType;
-    private Player playerToWatch;
+    public InventoryBuilder(Plugin plugin) {
+        this.plugin = plugin;
 
-    private static Map<Inventory, Integer> invsToHandle = new HashMap<>();
-    private static List<Inventory> invsToDisableClicks = new ArrayList<>();
-    private static List<Inventory> invsToDisableClose = new ArrayList<>();
+        String[] ccp = new String[]{"Inserisci password", "Scrivi in chat la password della tua carta di credito"};
+        String[] bca = new String[]{"Scegli l'importo", "Scrivi in chat la somma che vuoi prelevare"};
+        String[] cps = new String[]{"Scegli password", "Scrivi in chat una password per la tua carta di credito"};
 
-    public InventoryBuilder(Plugin p){
-        plugin = p;
+        titles.put(InputType.CREDIT_CARD_PASSWORD, cps);
+        titles.put(InputType.ATM_WITHDRAW_PASSWORD, ccp);
+        titles.put(InputType.ATM_DEPOSIT_PASSWORD, ccp);
+        titles.put(InputType.ATM_CHOOSE_AMOUNT, bca);
     }
 
-    public InventoryBuilder create(int size, String title){
+    public InventoryBuilder create(int size, String title) {
         inv = Bukkit.createInventory(null, size, title);
         return this;
     }
 
-    public InventoryBuilder addItems(Map<Integer, ItemStack> items){
-        for(Map.Entry<Integer, ItemStack> item : items.entrySet()){
-            inv.setItem(item.getKey(), item.getValue());
-        }
+    public InventoryBuilder addItems(Map<Integer, ItemStack> items) {
+        items.forEach(inv::setItem);
         return this;
     }
 
-    public InventoryBuilder fillWithGlass(GlassType type){
-        for(int i = 0; i < inv.getSize(); i++){
-            if(type.equals(GlassType.WHITE)){
-                if(inv.getItem(i) == null) inv.setItem(i, InvItems.whiteGlass);
-            }
-
-            if(type.equals(GlassType.BLACK)){
-                if(inv.getItem(i) == null) inv.setItem(i, InvItems.blackGlass);
-            }
-
-            if(type.equals(GlassType.MIXED)){
-                if(inv.getItem(i) == null){
-                    if(i % 2 == 0) inv.setItem(i, InvItems.blackGlass);
-                    else inv.setItem(i, InvItems.whiteGlass);
-                    // if((i & 1) == 0)
+    public InventoryBuilder fillWithGlass(GlassType type) {
+        for (int i = 0; i < inv.getSize(); i++) {
+            if (inv.getItem(i) == null) {
+                if (type == GlassType.WHITE) {
+                    inv.setItem(i, InvItems.whiteGlass);
+                } else if (type == GlassType.BLACK) {
+                    inv.setItem(i, InvItems.blackGlass);
+                } else if (type == GlassType.MIXED) {
+                    inv.setItem(i, (i % 2 == 0) ? InvItems.blackGlass : InvItems.whiteGlass);
                 }
             }
         }
-
         return this;
     }
 
-    public InventoryBuilder handleInput(int handleSlot){
-        handleStartSlot = handleSlot;
-        invsToHandle.put(inv, handleStartSlot);
+    public InventoryBuilder handleInput(Map<Integer, InputType> map) {
+        invsToHandle.put(inv, map);
         return this;
     }
 
-    public InventoryBuilder disableClicks(){
+    public InventoryBuilder disableClicks() {
         invsToDisableClicks.add(inv);
         return this;
     }
 
-    public InventoryBuilder disableClose(){
+    public InventoryBuilder disableClose() {
         invsToDisableClose.add(inv);
         return this;
     }
 
-    public void show(Player p){
-        p.openInventory(inv);
+    public static InventoryBuilder getBuilder(Inventory inv) {
+        return info.get(inv);
     }
 
-    public Inventory get(){
+    public void show(Player player) {
+        player.openInventory(inv);
+    }
+
+    public Inventory get() {
+        info.put(inv, this);
         return inv;
     }
 
     @EventHandler
-    public void makeCloseImpossible(InventoryCloseEvent e){
-        if(!invsToDisableClose.contains(e.getInventory())) return;
+    public void makeCloseImpossible(InventoryCloseEvent event) {
+        if (!invsToDisableClose.contains(event.getInventory())) return;
 
-        new BukkitRunnable(){
+        new BukkitRunnable() {
             @Override
             public void run() {
-                e.getPlayer().openInventory(inv);
+                event.getPlayer().openInventory(inv);
             }
         }.runTaskLater(plugin, 1);
     }
 
     @EventHandler
-    public void disableClicks(InventoryClickEvent e){
-        if(!invsToDisableClicks.contains(e.getClickedInventory())) return;
-        e.setCancelled(true);
+    public void disableClicks(InventoryClickEvent event) {
+        if (invsToDisableClicks.contains(event.getClickedInventory())) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler
-    public void startHandling(InventoryClickEvent e){
-        if(!invsToHandle.containsKey(e.getClickedInventory())) return;
-        if(e.getRawSlot() != invsToHandle
-                .entrySet()
-                .stream()
-                .filter(x -> x.getKey().equals(e.getClickedInventory()))
-                .findFirst()
-                .orElse(null).getValue()) return;
+    public void startHandling(InventoryClickEvent event) {
+        Inventory clicked = event.getClickedInventory();
 
-        playerToWatch = (Player) e.getWhoClicked();
-        ChatListener.startWatchingPlayer(InputType.CREDIT_CARD_PASSWORD, playerToWatch);
-        e.getWhoClicked().closeInventory();
+        //if (invsToHandle.containsKey(clicked) && invsToHandle.get(clicked).containsKey(event.getRawSlot()))
+
+        if (invsToHandle.containsKey(clicked) && invsToHandle.get(clicked).containsKey(event.getRawSlot())) {
+            Player p = (Player) event.getWhoClicked();
+            ChatManager.startWatchingPlayer(invsToHandle.get(clicked).get(event.getRawSlot()), p);
+            event.getWhoClicked().closeInventory();
+
+            String title = titles.entrySet().stream()
+                            .filter(x -> x.getKey().equals(invsToHandle.get(clicked).get(event.getRawSlot())))
+                                    .findFirst()
+                                            .orElse(null)
+                                                    .getValue()[0];
+
+            String subtitle = titles.entrySet().stream()
+                            .filter(x -> x.getKey().equals(invsToHandle.get(clicked).get(event.getRawSlot())))
+                                    .findFirst()
+                                            .orElse(null)
+                                                    .getValue()[1];
+
+            p.sendTitle(title, subtitle, 1, 1000, 1);
+        }
+    }
+
+    @EventHandler
+    public void disableHotbarSwap(PlayerItemHeldEvent event) {
+        Player player = event.getPlayer();
+        if (ChatManager.isBeingWatched(player)) {
+            event.setCancelled(true);
+            player.sendMessage("§r§e[FUNZIONE]§r§a Input:§r§f Non puoi cambiare oggetto se ti è stato chiesto un input in chat!!");
+        }
+    }
+
+    @EventHandler
+    public void disableItemSwap(InventoryClickEvent event) {
+        Player player = (Player) event.getWhoClicked();
+        if (ChatManager.isBeingWatched(player)) {
+            event.setCancelled(true);
+            player.sendMessage("§r§e[FUNZIONE]§r§a Input:§r§f Non puoi cambiare oggetto se ti è stato chiesto un input in chat!!");
+        }
+    }
+
+    @EventHandler
+    public void disableInteractions(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        if (ChatManager.isBeingWatched(player)) {
+            event.setCancelled(true);
+            player.sendMessage("§r§e[FUNZIONE]§r§a Input:§r§f Non puoi cambiare oggetto se ti è stato chiesto un input in chat!!");
+        }
     }
 }

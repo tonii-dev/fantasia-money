@@ -58,4 +58,11 @@ public class ItemHelper {
         itemStack.setItemMeta(meta);
         return itemStack;
     }
+
+    public static ItemStack setUnsafeLore(ItemStack itemStack, List<String> lore){
+        ItemMeta meta = itemStack.getItemMeta();
+        meta.setLore(lore);
+        itemStack.setItemMeta(meta);
+        return itemStack;
+    }
 }

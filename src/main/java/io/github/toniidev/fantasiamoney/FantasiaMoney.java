@@ -1,8 +1,10 @@
 package io.github.toniidev.fantasiamoney;
 
+import io.github.toniidev.fantasiamoney.blocks.ATM;
 import io.github.toniidev.fantasiamoney.items.CreditCard;
 import io.github.toniidev.fantasiamoney.listeners.PlayerJoin;
-import io.github.toniidev.fantasiamoney.services.ChatListener;
+import io.github.toniidev.fantasiamoney.services.ChatManager;
+import io.github.toniidev.fantasiamoney.services.CustomBlockBuilder;
 import io.github.toniidev.fantasiamoney.services.InventoryBuilder;
 import io.github.toniidev.fantasiamoney.services.LoreManager;
 import org.bukkit.Bukkit;
@@ -18,7 +20,10 @@ public final class FantasiaMoney extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new InventoryBuilder(this), this);
         Bukkit.getPluginManager().registerEvents(new PlayerJoin(this), this);
         Bukkit.getPluginManager().registerEvents(new CreditCard(this), this);
-        Bukkit.getPluginManager().registerEvents(new ChatListener(new CreditCard(this), this), this);
+        Bukkit.getPluginManager().registerEvents(new ChatManager(new CreditCard(this), this), this);
+        Bukkit.getPluginManager().registerEvents(new ChatManager(new ATM(this), this), this);
+        Bukkit.getPluginManager().registerEvents(new ATM(this), this);
+        Bukkit.getPluginManager().registerEvents(new CustomBlockBuilder(), this);
     }
 
     @Override

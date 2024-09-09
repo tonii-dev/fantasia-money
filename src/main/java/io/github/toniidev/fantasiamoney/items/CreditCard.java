@@ -1,21 +1,17 @@
 package io.github.toniidev.fantasiamoney.items;
 
-import io.github.toniidev.fantasiamoney.enums.CCStatus;
-import io.github.toniidev.fantasiamoney.enums.GlassType;
-import io.github.toniidev.fantasiamoney.enums.InputType;
-import io.github.toniidev.fantasiamoney.enums.ItemType;
+import io.github.toniidev.fantasiamoney.classes.BankTransaction;
+import io.github.toniidev.fantasiamoney.enums.*;
 import io.github.toniidev.fantasiamoney.helpers.ItemHelper;
 import io.github.toniidev.fantasiamoney.interfaces.MessageHandler;
-import io.github.toniidev.fantasiamoney.services.ChatListener;
+import io.github.toniidev.fantasiamoney.services.ChatManager;
 import io.github.toniidev.fantasiamoney.services.InventoryBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -31,6 +27,7 @@ public class CreditCard implements Listener, MessageHandler {
     private CCStatus status;
     private Plugin plugin;
     private Inventory inv;
+    private List<BankTransaction> transactions = new ArrayList<>();
 
     //private static List<Inventory> invs = new ArrayList<>();
     private static Map<Inventory, CreditCard> invs = new HashMap<>();
@@ -55,7 +52,7 @@ public class CreditCard implements Listener, MessageHandler {
     }
 
     public ItemStack toItemStack(){
-        ItemStack stack = ItemHelper.createItem(Material.NETHER_BRICK, "§r§bCarta di credito", ItemType.PLUGIN);
+        ItemStack stack = ItemHelper.createItem(Material.NETHERITE_INGOT, "§r§bCarta di credito", ItemType.PLUGIN);
         ItemHelper.setLore(stack,
                 "§r§7Numero: §r§f" + number, "§r§7Stato: §r" +
                         (status.equals(CCStatus.ACTIVE) ? "§aAttiva" : "§cInattiva"),
@@ -68,7 +65,7 @@ public class CreditCard implements Listener, MessageHandler {
         return stack;
     }
 
-    private CreditCard getCreditCardFromPlayer(Player p){
+    public static CreditCard getCreditCardFromPlayer(Player p){
         ItemStack itemInMainHand = p.getInventory().getItemInMainHand();
         if(!isCreditCard(itemInMainHand)) return null;
 
@@ -88,7 +85,7 @@ public class CreditCard implements Listener, MessageHandler {
     }
 
     public static boolean isCreditCard(ItemStack itemStack){
-        return itemStack.getType().equals(Material.NETHER_BRICK)
+        return itemStack.getType().equals(Material.NETHERITE_INGOT)
                 && ItemHelper.getLastLoreLine(itemStack).toUpperCase().endsWith("PLUGIN");
     }
 
@@ -126,9 +123,12 @@ public class CreditCard implements Listener, MessageHandler {
         items.put(7, close);
         items.put(8, confirm);
 
+        Map<Integer, InputType> handling = new HashMap<>();
+        handling.put(4, InputType.CREDIT_CARD_PASSWORD);
+
         inv = new InventoryBuilder(plugin).create(9, "Gestione")
                 .disableClicks()
-                .handleInput(4)
+                .handleInput(handling)
                 .addItems(items)
                 .fillWithGlass(GlassType.WHITE)
                 .get();
@@ -140,6 +140,7 @@ public class CreditCard implements Listener, MessageHandler {
     public void setup(PlayerInteractEvent e){
         ItemStack itemStack = e.getPlayer().getInventory().getItemInMainHand();
 
+        if(ChatManager.isBeingWatched(e.getPlayer())) return;
         if(!isCreditCard(itemStack)) return;
         if(isActive(itemStack)) return;
 
@@ -149,14 +150,15 @@ public class CreditCard implements Listener, MessageHandler {
 
     @Override
     public void pinHandler(String message, Player sender) {
-        if(!ChatListener.getList(InputType.CREDIT_CARD_PASSWORD).contains(sender)) return;
+        if(!ChatManager.getList().containsKey(sender)) return;
+        if(!ChatManager.getList().get(sender).equals(InputType.CREDIT_CARD_PASSWORD)) return;
 
         CreditCard card = getCreditCardFromPlayer(sender);
         card.pwd = message;
         refresh(sender);
         sender.openInventory(inv);
 
-        ChatListener.stopWatchingPlayer(InputType.CREDIT_CARD_PASSWORD, sender);
+        ChatManager.stopWatchingPlayer(sender);
     }
 
     // handle inv
@@ -208,10 +210,12 @@ public class CreditCard implements Listener, MessageHandler {
 
     public void load(double amount){
         money += amount;
+        registerTransaction(new BankTransaction(amount, TransactionType.ADD_MONEY));
     }
 
     public void charge(double amount){
         money -= amount;
+        registerTransaction(new BankTransaction(amount, TransactionType.REMOVE_MONEY));
     }
 
     public String getNumber() {
@@ -236,5 +240,41 @@ public class CreditCard implements Listener, MessageHandler {
 
     public void setStatus(CCStatus s){
         status = s;
+    }
+
+    public List<BankTransaction> getTransactions() {
+        return transactions;
+    }
+
+    public CreditCard registerTransaction(BankTransaction t){
+        // Aggiungi il nuovo oggetto all'inizio della lista
+        transactions.add(0, t);
+
+        // Se la lista contiene più di 10 oggetti, rimuovi l'ultimo
+        if (transactions.size() > 10) {
+            transactions.remove(transactions.size() - 1);
+        }
+
+        return this;
+    }
+
+    public ItemStack getTransactionsItemStack(){
+        ItemStack itemStack = ItemHelper.createItem(Material.FILLED_MAP, "§aTransazioni recenti", ItemType.DEFAULT);
+
+        List<String> lore = new ArrayList<>();
+        lore.add(" ");
+
+        if(this.getTransactions().isEmpty()){
+            lore.add("§r§7Non ci sono transazioni.");
+        }
+        else{
+            for(BankTransaction t : this.getTransactions()){
+                lore.add("§r" + (t.getType().equals(TransactionType.ADD_MONEY)
+                        ? "§a+" : "§c-") + " §r§6" + t.getAmount() + "§7, §e" + t.getDate());
+            }
+        }
+
+        ItemHelper.setUnsafeLore(itemStack, lore);
+        return itemStack;
     }
 }
