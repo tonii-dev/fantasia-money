@@ -28,6 +28,11 @@ public class ItemHelper {
         return itemStack;
     }
 
+    public static boolean isMoney(ItemStack itemStack){
+        return ItemHelper.isCustomItem(itemStack) &&
+                ItemHelper.getLastLoreLine(itemStack).toUpperCase().endsWith("VALUTA");
+    }
+
     public static boolean isCustomItem(ItemStack itemStack){
         return !getLastLoreLine(itemStack).endsWith("MINECRAFT");
     }
